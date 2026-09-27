@@ -316,6 +316,7 @@ func (b *boundedLogBuffer) stats() (queued, retained int, retainedBytes int64, c
 }
 
 type asyncBatchWriterOptions struct {
+	onBatchReleased   func()
 	maxEntries        int
 	maxBytes          int64
 	maxBatchEntries   int
@@ -507,7 +508,7 @@ func (w *asyncBatchWriter) run() {
 			}
 			consecutiveFailures = 0
 			retryDelay = w.options.initialRetryDelay
-			w.buffer.release(batch)
+			w.releaseBatch(batch)
 			batch = batch[:0]
 			batchBytes = 0
 			return true
@@ -517,7 +518,7 @@ func (w *asyncBatchWriter) run() {
 		w.diagnostics.recordError(err)
 		if !allowRetry {
 			w.diagnostics.recordDeliveryDrop(uint64(len(batch)))
-			w.buffer.release(batch)
+			w.releaseBatch(batch)
 			batch = batch[:0]
 			batchBytes = 0
 			return true
@@ -547,7 +548,7 @@ func (w *asyncBatchWriter) run() {
 			retryDelay = w.options.initialRetryDelay
 		}
 
-		w.buffer.release(batch)
+		w.releaseBatch(batch)
 		batch = batch[:0]
 		batchBytes = 0
 		return true
@@ -611,7 +612,7 @@ func (w *asyncBatchWriter) finishShutdown(initial []bufferedLogEntry) {
 			w.diagnostics.recordError(err)
 			w.diagnostics.recordShutdownDrop(uint64(len(batch)))
 		}
-		w.buffer.release(batch)
+		w.releaseBatch(batch)
 		batch = nil
 
 		if ctx.Err() != nil {
@@ -619,4 +620,13 @@ func (w *asyncBatchWriter) finishShutdown(initial []bufferedLogEntry) {
 			return
 		}
 	}
+}
+
+// Release prepared transport state only after retries and shutdown replay finish.
+func (w *asyncBatchWriter) releaseBatch(batch []bufferedLogEntry) {
+	if w.options.onBatchReleased != nil {
+		w.options.onBatchReleased()
+	}
+
+	w.buffer.release(batch)
 }

@@ -117,7 +117,7 @@ func flattenMap(data map[string]interface{}, prefix string, seperator string, re
 
 // SinkConfig represents the configuration for a sink
 type SinkConfig struct {
-	Type string                 `json:"type"` // "file", "loki", or "openobserve"
+	Type string                 `json:"type"` // Registered sink type
 	Raw  map[string]interface{} `json:"-"`    // Raw config for hash comparison
 }
 

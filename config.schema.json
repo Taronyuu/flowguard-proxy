@@ -605,7 +605,8 @@
                     "enum": [
                         "file",
                         "loki",
-                        "openobserve"
+                        "openobserve",
+                        "flowguard_ingest"
                     ],
                     "description": "The type of logging sink"
                 },
@@ -616,7 +617,7 @@
                 "url": {
                     "type": "string",
                     "format": "uri",
-                    "description": "For loki sink: Loki push API URL (e.g., http://loki:3100/loki/api/v1/push). For openobserve sink: OpenObserve base URL (e.g., https://observe.example.com)"
+                    "description": "For loki sink: Loki push API URL (e.g., http://loki:3100/loki/api/v1/push). For openobserve sink: OpenObserve base URL (e.g., https://observe.example.com). For flowguard_ingest sink: exact HTTPS ingest endpoint."
                 },
                 "organization": {
                     "type": "string",
@@ -644,6 +645,21 @@
                 "password": {
                     "type": "string",
                     "description": "For loki sink: Optional basic auth password. For openobserve sink: Basic auth password (API token)"
+                },
+                "protocol_version": {
+                    "type": "integer",
+                    "const": 1,
+                    "description": "For flowguard_ingest sink: ingest protocol version"
+                },
+                "credential_id": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{32}$",
+                    "description": "For flowguard_ingest sink: shared team ingest-only credential ID"
+                },
+                "secret": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{43}$",
+                    "description": "For flowguard_ingest sink: base64url-encoded 32-byte credential secret"
                 }
             },
             "required": [
@@ -691,6 +707,28 @@
                             "url",
                             "organization"
                         ]
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "type": {
+                                "const": "flowguard_ingest"
+                            }
+                        }
+                    },
+                    "then": {
+                        "required": [
+                            "url",
+                            "protocol_version",
+                            "credential_id",
+                            "secret"
+                        ],
+                        "properties": {
+                            "url": {
+                                "pattern": "^https://"
+                            }
+                        }
                     }
                 }
             ],

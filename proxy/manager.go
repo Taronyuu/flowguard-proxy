@@ -17,6 +17,7 @@ import (
 	"flowguard/config"
 	"flowguard/fail2ban"
 	"flowguard/iplist"
+	"flowguard/logger"
 	"flowguard/middleware"
 	"flowguard/systemdnotify"
 	"flowguard/updater"
@@ -853,6 +854,7 @@ func (p *Manager) sendHeartbeat() {
 		OS:            runtime.GOOS,
 		Arch:          runtime.GOARCH,
 		Version:       p.config.Version,
+		Capabilities:  []string{logger.FlowGuardIngestCapability},
 		Firewall:      p.getFirewallState(),
 		StartedAt:     p.startedAt.Unix(),
 		HostnameCount: p.certManager.HostnameCount(),

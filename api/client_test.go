@@ -365,6 +365,7 @@ func TestSendHeartbeatIncludesFirewallPayload(t *testing.T) {
 				OS:            "linux",
 				Arch:          "amd64",
 				Version:       "1.2.3",
+				Capabilities:  []string{"log_ingest_v1"},
 				StartedAt:     123,
 				HostnameCount: 2,
 				BindAddresses: []string{"203.0.113.10"},
@@ -373,6 +374,10 @@ func TestSendHeartbeatIncludesFirewallPayload(t *testing.T) {
 
 			if err := client.SendHeartbeat(payload); err != nil {
 				t.Fatalf("SendHeartbeat: %v", err)
+			}
+
+			if len(received.Capabilities) != 1 || received.Capabilities[0] != "log_ingest_v1" {
+				t.Fatalf("unexpected capabilities: %#v", received.Capabilities)
 			}
 
 			if received.Firewall != firewall {

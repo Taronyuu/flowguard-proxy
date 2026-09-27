@@ -238,6 +238,7 @@ type HeartbeatPayload struct {
 	OS            string            `json:"os"`
 	Arch          string            `json:"arch"`
 	Version       string            `json:"version"`
+	Capabilities  []string          `json:"capabilities,omitempty"`
 	Firewall      FirewallHeartbeat `json:"firewall"`
 	StartedAt     int64             `json:"started_at"`
 	HostnameCount int               `json:"hostname_count"`
