@@ -9,6 +9,12 @@ release.
 
 ## [Unreleased]
 
+## [0.25.0]
+
+### Added
+
+- Added the `flowguard_ingest` log sink with authenticated HTTPS delivery, compressed batches, stable batch identities across retries, receipt validation, and heartbeat capability advertisement. ([37d2b7dd](https://github.com/chieftools/flowguard-proxy/commit/37d2b7ddeaa3f80d4c879ec1a9409ed4431a58a1))
+
 ## [0.24.0]
 
 ### Added
@@ -615,7 +621,8 @@ _No source changes; this release republishes 0.3.5._
 
 _Initial release._
 
-[Unreleased]: https://github.com/chieftools/flowguard-proxy/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/chieftools/flowguard-proxy/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/chieftools/flowguard-proxy/releases/tag/v0.25.0
 [0.24.0]: https://github.com/chieftools/flowguard-proxy/releases/tag/v0.24.0
 [0.23.0]: https://github.com/chieftools/flowguard-proxy/releases/tag/v0.23.0
 [0.22.1]: https://github.com/chieftools/flowguard-proxy/releases/tag/v0.22.1
