@@ -9,6 +9,12 @@ release.
 
 ## [Unreleased]
 
+## [0.25.1]
+
+### Changed
+
+- Included `server/<server-id>` in managed API, realtime, and log delivery User-Agent headers, including after configuration reloads. ([3191c45e](https://github.com/chieftools/flowguard-proxy/commit/3191c45e5a47e6ea4686774cf23066a94f7886ad))
+
 ## [0.25.0]
 
 ### Added
@@ -621,7 +627,8 @@ _No source changes; this release republishes 0.3.5._
 
 _Initial release._
 
-[Unreleased]: https://github.com/chieftools/flowguard-proxy/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/chieftools/flowguard-proxy/compare/v0.25.1...HEAD
+[0.25.1]: https://github.com/chieftools/flowguard-proxy/releases/tag/v0.25.1
 [0.25.0]: https://github.com/chieftools/flowguard-proxy/releases/tag/v0.25.0
 [0.24.0]: https://github.com/chieftools/flowguard-proxy/releases/tag/v0.24.0
 [0.23.0]: https://github.com/chieftools/flowguard-proxy/releases/tag/v0.23.0
