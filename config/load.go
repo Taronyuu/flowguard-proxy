@@ -30,15 +30,6 @@ func (m *Manager) Load() error {
 		return fmt.Errorf("failed to parse config JSON: %w", err)
 	}
 
-	// Set host key in API client and cache if available
-	if config.Host != nil && config.Host.Key != "" {
-		m.apiClient.SetHostKey(config.Host.Key)
-
-		if m.cache != nil {
-			m.cache.SetAPICredentials(m.apiClient.GetBaseURL(), config.Host.Key)
-		}
-	}
-
 	if config.TrustedProxies != nil {
 		if err := validateTrustedProxiesConfig(config.TrustedProxies); err != nil {
 			return err
@@ -73,6 +64,17 @@ func (m *Manager) Load() error {
 
 	if !config.ProtocolSettings().AnyEnabled() {
 		return fmt.Errorf("server.protocols must enable at least one protocol")
+	}
+
+	hostKey := ""
+	if config.Host != nil {
+		hostKey = config.Host.Key
+	}
+
+	userAgent := config.UserAgent(m.userAgent)
+	m.apiClient.SetIdentity(hostKey, userAgent)
+	if m.cache != nil {
+		m.cache.SetAPIIdentity(m.apiClient.GetBaseURL(), hostKey, userAgent)
 	}
 
 	// Pre-compute sorted rules for efficient iteration during request processing

@@ -166,7 +166,7 @@ func (m *Manager) GetVersion() string {
 func (m *Manager) GetUserAgent() string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.userAgent
+	return m.config.UserAgent(m.userAgent)
 }
 
 // IsVerbose reports whether verbose runtime logging is enabled.

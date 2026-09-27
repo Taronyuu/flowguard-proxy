@@ -8,11 +8,13 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
 // Client represents a FlowGuard API client
 type Client struct {
+	identityMu sync.RWMutex
 	baseURL    string
 	hostKey    string
 	userAgent  string
@@ -120,7 +122,9 @@ type AddressPairConfigPatch struct {
 // If etag is provided, it will be sent in the If-None-Match header
 // Returns ErrNotModified if the server returns 304 Not Modified
 func (c *Client) GetConfig(etag string) ([]byte, error) {
-	if c.hostKey == "" {
+	hostKey, userAgent := c.identity()
+
+	if hostKey == "" {
 		return nil, fmt.Errorf("host key is required")
 	}
 
@@ -129,8 +133,8 @@ func (c *Client) GetConfig(etag string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.hostKey)
-	req.Header.Set("User-Agent", c.userAgent)
+	req.Header.Set("Authorization", "Bearer "+hostKey)
+	req.Header.Set("User-Agent", userAgent)
 
 	// Add If-None-Match header if etag is provided
 	if etag != "" {
@@ -173,7 +177,9 @@ func (c *Client) GetConfig(etag string) ([]byte, error) {
 
 // PatchConfig updates setup-managed host, server, and integration configuration.
 func (c *Client) PatchConfig(payload ConfigPatch) error {
-	if c.hostKey == "" {
+	hostKey, userAgent := c.identity()
+
+	if hostKey == "" {
 		return fmt.Errorf("host key is required")
 	}
 	if payload.Host == nil && payload.Server == nil && payload.Fail2Ban == nil {
@@ -190,9 +196,9 @@ func (c *Client) PatchConfig(payload ConfigPatch) error {
 		return fmt.Errorf("failed to create config patch request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.hostKey)
+	req.Header.Set("Authorization", "Bearer "+hostKey)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", c.userAgent)
+	req.Header.Set("User-Agent", userAgent)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -247,6 +253,8 @@ type HeartbeatPayload struct {
 
 // SendHeartbeat POSTs the heartbeat payload to the API
 func (c *Client) SendHeartbeat(payload HeartbeatPayload) error {
+	hostKey, userAgent := c.identity()
+
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("failed to marshal heartbeat payload: %w", err)
@@ -257,9 +265,9 @@ func (c *Client) SendHeartbeat(payload HeartbeatPayload) error {
 		return fmt.Errorf("failed to create heartbeat request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.hostKey)
+	req.Header.Set("Authorization", "Bearer "+hostKey)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", c.userAgent)
+	req.Header.Set("User-Agent", userAgent)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -274,9 +282,20 @@ func (c *Client) SendHeartbeat(payload HeartbeatPayload) error {
 	return nil
 }
 
-// SetHostKey updates the host key for the client
-func (c *Client) SetHostKey(hostKey string) {
+// SetIdentity updates request credentials and identification together on configuration reload.
+func (c *Client) SetIdentity(hostKey, userAgent string) {
+	c.identityMu.Lock()
+	defer c.identityMu.Unlock()
+
 	c.hostKey = hostKey
+	c.userAgent = userAgent
+}
+
+func (c *Client) identity() (string, string) {
+	c.identityMu.RLock()
+	defer c.identityMu.RUnlock()
+
+	return c.hostKey, c.userAgent
 }
 
 // GetBaseURL returns the configured base URL

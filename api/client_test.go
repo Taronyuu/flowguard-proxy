@@ -414,3 +414,29 @@ func TestSendHeartbeatClosesResponseWithoutExplicitDrain(t *testing.T) {
 		t.Fatalf("expected response body to close once, got %d", body.closes)
 	}
 }
+
+func TestManagedIdentityOnAPIRequests(t *testing.T) {
+	client := NewClient("setup-key", "FlowGuard/99.0.0")
+	client.SetIdentity("managed-key", "FlowGuard/99.0.0 server/synthetic-a")
+	requests := 0
+	client.httpClient = &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		if request.UserAgent() != "FlowGuard/99.0.0 server/synthetic-a" || request.Header.Get("Authorization") != "Bearer managed-key" {
+			t.Errorf("unexpected request identity: %v", request.Header)
+		}
+		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+	})}
+
+	if _, err := client.GetConfig(""); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.PatchConfig(ConfigPatch{Host: &HostConfigPatch{CertPath: "/synthetic/certs"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.SendHeartbeat(HeartbeatPayload{Version: "99.0.0"}); err != nil {
+		t.Fatal(err)
+	}
+	if requests != 3 {
+		t.Fatalf("sent %d requests, want 3", requests)
+	}
+}

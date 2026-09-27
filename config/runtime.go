@@ -390,7 +390,7 @@ func (m *Manager) updatePusherClient(config *Config) {
 
 	// If no existing client, create new one
 	if m.realtimeClient == nil {
-		m.realtimeClient = pusher.NewClient(config.Realtime, m.userAgent, config.Host.Key, m.verbose)
+		m.realtimeClient = pusher.NewClient(config.Realtime, config.UserAgent(m.userAgent), config.Host.Key, m.verbose)
 
 		if m.realtimeClient != nil {
 			// Set up event handler for config updates
@@ -453,7 +453,7 @@ func (m *Manager) updatePusherClient(config *Config) {
 		}
 	} else {
 		// Update existing client configuration
-		if err := m.realtimeClient.UpdateConfig(config.Realtime); err != nil {
+		if err := m.realtimeClient.UpdateConfig(config.Realtime, config.UserAgent(m.userAgent), config.Host.Key); err != nil {
 			log.Printf("[config] Failed to update realtime client configuration: %v", err)
 		}
 	}

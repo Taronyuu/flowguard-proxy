@@ -182,7 +182,7 @@ func (c *Client) IsConnected() bool {
 }
 
 // UpdateConfig updates the Realtime configuration and reconnects if necessary
-func (c *Client) UpdateConfig(newConfig *Config) error {
+func (c *Client) UpdateConfig(newConfig *Config, userAgent, hostKey string) error {
 	c.mu.Lock()
 
 	// If no config provided, disconnect
@@ -204,9 +204,13 @@ func (c *Client) UpdateConfig(newConfig *Config) error {
 		c.config.Port != newConfig.Port ||
 		c.config.Channel != newConfig.Channel ||
 		c.config.AuthURL != newConfig.AuthURL ||
-		c.config.Encrypted != newConfig.Encrypted
+		c.config.Encrypted != newConfig.Encrypted ||
+		c.userAgent != userAgent ||
+		c.hostKey != hostKey
 
 	c.config = newConfig
+	c.userAgent = userAgent
+	c.hostKey = hostKey
 
 	// If config changed, replace any current connection or in-flight connection attempt.
 	var connToClose *websocket.Conn

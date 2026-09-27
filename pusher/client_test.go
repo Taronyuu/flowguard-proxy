@@ -23,6 +23,7 @@ type realtimeTestServer struct {
 	sendEstablished bool
 	accepts         atomic.Int32
 	closeCodes      chan int
+	userAgents      chan string
 }
 
 type pusherRoundTripFunc func(*http.Request) (*http.Response, error)
@@ -37,6 +38,7 @@ func newRealtimeTestServer(t *testing.T, sendEstablished bool) *realtimeTestServ
 	rts := &realtimeTestServer{
 		sendEstablished: sendEstablished,
 		closeCodes:      make(chan int, 10),
+		userAgents:      make(chan string, 10),
 	}
 
 	upgrader := websocket.Upgrader{}
@@ -47,6 +49,8 @@ func newRealtimeTestServer(t *testing.T, sendEstablished bool) *realtimeTestServ
 			return
 		}
 		defer conn.Close()
+
+		rts.userAgents <- r.UserAgent()
 
 		acceptNumber := rts.accepts.Add(1)
 
@@ -119,6 +123,9 @@ func TestGenerateChannelAuthReusesHTTPClient(t *testing.T) {
 	sharedClient := &http.Client{
 		Transport: pusherRoundTripFunc(func(req *http.Request) (*http.Response, error) {
 			requests.Add(1)
+			if req.UserAgent() != "FlowGuard/99.0.0 server/synthetic-a" {
+				t.Errorf("unexpected user agent: %q", req.UserAgent())
+			}
 			if got := req.Header.Get("Authorization"); got != "Bearer host-key" {
 				t.Fatalf("unexpected authorization header: %q", got)
 			}
@@ -132,7 +139,7 @@ func TestGenerateChannelAuthReusesHTTPClient(t *testing.T) {
 	client.httpClient = sharedClient
 
 	for range 2 {
-		auth, err := client.generateChannelAuth("socket-42", "private-events", "https://flowguard.test/auth", "host-key", "flowguard-test")
+		auth, err := client.generateChannelAuth("socket-42", "private-events", "https://flowguard.test/auth", "host-key", "FlowGuard/99.0.0 server/synthetic-a")
 		if err != nil {
 			t.Fatalf("generate channel auth: %v", err)
 		}
@@ -201,7 +208,7 @@ func TestUpdateConfigReplacesConnectionWithNormalClose(t *testing.T) {
 	}
 	waitForConnected(t, client)
 
-	if err := client.UpdateConfig(secondServer.config(t, "public-second")); err != nil {
+	if err := client.UpdateConfig(secondServer.config(t, "public-second"), "flowguard-test", "host-key"); err != nil {
 		t.Fatalf("update config failed: %v", err)
 	}
 
@@ -262,5 +269,29 @@ func waitForCloseCode(t *testing.T, server *realtimeTestServer) int {
 	case <-time.After(2 * time.Second):
 		t.Fatalf("timed out waiting for close code")
 		return -1
+	}
+}
+
+func TestUpdateConfigReconnectsWithChangedIdentity(t *testing.T) {
+	server := newRealtimeTestServer(t, true)
+	configuration := server.config(t, "public-test")
+	client := NewClient(configuration, "FlowGuard/99.0.0 server/synthetic-a", "key-a", false)
+	t.Cleanup(client.Disconnect)
+
+	if err := client.Connect(); err != nil {
+		t.Fatal(err)
+	}
+	waitForConnected(t, client)
+	if got := <-server.userAgents; got != "FlowGuard/99.0.0 server/synthetic-a" {
+		t.Fatalf("initial user agent: %q", got)
+	}
+
+	if err := client.UpdateConfig(configuration, "FlowGuard/99.0.0 server/synthetic-b", "key-b"); err != nil {
+		t.Fatal(err)
+	}
+	waitForAccepts(t, server, 2)
+	waitForConnected(t, client)
+	if got := <-server.userAgents; got != "FlowGuard/99.0.0 server/synthetic-b" {
+		t.Fatalf("reloaded user agent: %q", got)
 	}
 }

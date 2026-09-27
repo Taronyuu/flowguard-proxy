@@ -353,6 +353,10 @@ func (lm *LoggingMiddleware) updateLogOutput(cfg *config.Config) error {
 		return nil
 	}
 
+	if lm.configMgr != nil {
+		lm.loggerManager.SetUserAgent(lm.configMgr.GetUserAgent())
+	}
+
 	loggingCfg := cfg.Logging
 
 	// Update sinks in the logger manager

@@ -2,6 +2,7 @@ package cache
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -412,4 +413,53 @@ func TestIsAPIURL(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestManagedCacheIdentityOnlyReachesPanel(t *testing.T) {
+	for _, fileMode := range []bool{false, true} {
+		t.Run(fmt.Sprintf("file=%t", fileMode), func(t *testing.T) {
+			requests := 0
+			client := &http.Client{Transport: cacheIdentityTransport(func(request *http.Request) (*http.Response, error) {
+				requests++
+				wantAgent, wantAuth := "FlowGuard/99.0.0", ""
+				if request.URL.Host == "panel.example.test" {
+					wantAgent = "FlowGuard/99.0.0 server/synthetic-a"
+					wantAuth = "Bearer synthetic-key"
+				}
+				if request.UserAgent() != wantAgent || request.Header.Get("Authorization") != wantAuth {
+					t.Errorf("unexpected identity for %s: %v", request.URL, request.Header)
+				}
+				return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("synthetic-data"))}, nil
+			})}
+			cache, err := NewCache(t.TempDir(), "FlowGuard/99.0.0", false, WithHTTPClient(client))
+			if err != nil {
+				t.Fatal(err)
+			}
+			cache.SetAPIIdentity("https://panel.example.test", "synthetic-key", "FlowGuard/99.0.0 server/synthetic-a")
+
+			for _, endpoint := range []string{
+				"https://panel.example.test/api/v1/list",
+				"https://lists.example.test/list",
+				"https://panel.example.test.external.invalid/list",
+			} {
+				if fileMode {
+					_, _, err = cache.FetchFileWithCache(endpoint, 0)
+				} else {
+					_, _, err = cache.FetchWithCacheForced(endpoint)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if requests != 3 {
+				t.Fatalf("requests = %d, want 3", requests)
+			}
+		})
+	}
+}
+
+type cacheIdentityTransport func(*http.Request) (*http.Response, error)
+
+func (transport cacheIdentityTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	return transport(request)
 }

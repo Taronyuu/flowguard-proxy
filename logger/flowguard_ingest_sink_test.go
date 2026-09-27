@@ -525,3 +525,46 @@ func TestFlowGuardIngestDoesNotForwardCredentialsOnRedirect(t *testing.T) {
 	}
 	sink.releaseBatch()
 }
+
+func TestUserAgentReloadDrainsLogsWithOriginalServerIdentity(t *testing.T) {
+	manager := NewManager("FlowGuard/99.0.0 server/synthetic-a")
+	t.Cleanup(func() { manager.Close() })
+	configuration := map[string]map[string]interface{}{"shadow": ingestTestConfig()}
+	if err := manager.UpdateSinks(configuration); err != nil {
+		t.Fatal(err)
+	}
+
+	var userAgents []string
+	transport := ingestTestTransport(func(request *http.Request) (*http.Response, error) {
+		body := ingestTestBody(t, request)
+		userAgents = append(userAgents, request.UserAgent())
+		return ingestTestReceipt(t, request, body), nil
+	})
+	original := manager.sinks["shadow"].(*FlowGuardIngestSink)
+	original.client.Transport = transport
+	manager.Write(ingestTestEntry(2031, 6, 8))
+
+	manager.SetUserAgent("FlowGuard/99.0.0 server/synthetic-a")
+	if err := manager.UpdateSinks(configuration); err != nil {
+		t.Fatal(err)
+	}
+	if manager.sinks["shadow"] != original {
+		t.Fatal("unchanged identity recreated sink")
+	}
+
+	manager.SetUserAgent("FlowGuard/99.0.0 server/synthetic-b")
+	if err := manager.UpdateSinks(configuration); err != nil {
+		t.Fatal(err)
+	}
+	current := manager.sinks["shadow"].(*FlowGuardIngestSink)
+	current.client.Transport = transport
+	manager.Write(ingestTestEntry(2031, 6, 9))
+	if err := manager.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"FlowGuard/99.0.0 server/synthetic-a", "FlowGuard/99.0.0 server/synthetic-b"}
+	if !reflect.DeepEqual(userAgents, want) {
+		t.Fatalf("user agents = %v, want %v", userAgents, want)
+	}
+}

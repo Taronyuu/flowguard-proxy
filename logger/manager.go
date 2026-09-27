@@ -38,6 +38,21 @@ func NewManager(userAgent string) *Manager {
 	return manager
 }
 
+// SetUserAgent recreates sinks on the next update when the managed identity changes.
+func (m *Manager) SetUserAgent(userAgent string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.userAgent == userAgent {
+		return
+	}
+
+	m.userAgent = userAgent
+	for name := range m.sinkConfigs {
+		m.sinkConfigs[name] = ""
+	}
+}
+
 // Write writes a log entry to all configured sinks
 func (m *Manager) Write(entry *LogEntry) {
 	m.mu.RLock()

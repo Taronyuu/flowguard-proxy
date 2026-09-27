@@ -11,17 +11,20 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
 // Cache provides a generic file-based cache for external data
 type Cache struct {
-	cacheDir   string
-	userAgent  string
-	apiBase    string
-	apiKey     string
-	verbose    bool
-	httpClient *http.Client
+	identityMu   sync.RWMutex
+	apiUserAgent string
+	cacheDir     string
+	userAgent    string
+	apiBase      string
+	apiKey       string
+	verbose      bool
+	httpClient   *http.Client
 }
 
 // CacheOption configures a Cache.
@@ -67,13 +70,28 @@ func NewCache(cacheDir string, userAgent string, verbose bool, options ...CacheO
 
 // SetAPICredentials configures the API base URL and key for automatic authentication
 func (c *Cache) SetAPICredentials(apiBase, apiKey string) {
+	c.SetAPIIdentity(apiBase, apiKey, c.userAgent)
+}
+
+// SetAPIIdentity configures identification for managed API requests.
+func (c *Cache) SetAPIIdentity(apiBase, apiKey, userAgent string) {
+	c.identityMu.Lock()
+	defer c.identityMu.Unlock()
+
 	c.apiBase = apiBase
 	c.apiKey = apiKey
+	c.apiUserAgent = userAgent
 }
 
 // IsAPIURL reports whether rawURL is below the configured FlowGuard API path.
 func (c *Cache) IsAPIURL(rawURL string) bool {
-	if c == nil || c.apiBase == "" {
+	if c == nil {
+		return false
+	}
+
+	c.identityMu.RLock()
+	defer c.identityMu.RUnlock()
+	if c.apiBase == "" {
 		return false
 	}
 
@@ -138,7 +156,9 @@ func (c *Cache) resolveToken(url string, bearerToken ...string) string {
 	if len(bearerToken) > 0 {
 		return bearerToken[0]
 	}
-	if c.shouldUseAPIKey(url) {
+	c.identityMu.RLock()
+	defer c.identityMu.RUnlock()
+	if c.apiBase != "" && strings.HasPrefix(url, strings.TrimRight(c.apiBase, "/")+"/") {
 		return c.apiKey
 	}
 	return ""
@@ -244,8 +264,8 @@ func (c *Cache) FetchFileWithCache(url string, maxAge time.Duration, bearerToken
 		return "", false, err
 	}
 
-	if c.userAgent != "" {
-		req.Header.Set("User-Agent", c.userAgent)
+	if userAgent := c.userAgentForURL(url); userAgent != "" {
+		req.Header.Set("User-Agent", userAgent)
 	}
 
 	if meta.ETag != "" {
@@ -253,12 +273,7 @@ func (c *Cache) FetchFileWithCache(url string, maxAge time.Duration, bearerToken
 	}
 
 	// Apply bearer token: explicit parameter or automatic API key
-	var token string
-	if len(bearerToken) > 0 {
-		token = bearerToken[0]
-	} else if c.shouldUseAPIKey(url) {
-		token = c.apiKey
-	}
+	token := c.resolveToken(url, bearerToken...)
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -418,8 +433,8 @@ func (c *Cache) fetchFromURL(url string, etag string, bearerToken string) ([]byt
 		return nil, "", err
 	}
 
-	if c.userAgent != "" {
-		req.Header.Set("User-Agent", c.userAgent)
+	if userAgent := c.userAgentForURL(url); userAgent != "" {
+		req.Header.Set("User-Agent", userAgent)
 	}
 
 	if etag != "" {
@@ -459,10 +474,13 @@ func (c *Cache) fetchFromURL(url string, etag string, bearerToken string) ([]byt
 	return body, newETag, nil
 }
 
-// shouldUseAPIKey checks if a URL starts with the configured API base
-func (c *Cache) shouldUseAPIKey(url string) bool {
-	if c.apiBase == "" || c.apiKey == "" {
-		return false
+func (c *Cache) userAgentForURL(url string) string {
+	c.identityMu.RLock()
+	defer c.identityMu.RUnlock()
+
+	if c.apiKey != "" && c.apiBase != "" && strings.HasPrefix(url, strings.TrimRight(c.apiBase, "/")+"/") {
+		return c.apiUserAgent
 	}
-	return strings.HasPrefix(url, c.apiBase)
+
+	return c.userAgent
 }
