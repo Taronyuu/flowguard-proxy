@@ -9,6 +9,12 @@ release.
 
 ## [Unreleased]
 
+## [0.25.2]
+
+### Changed
+
+- Sent a stable `X-FlowGuard-Prepared-At` time with each `flowguard_ingest` request and its retries, so the ingest gateway can deduplicate retries by content and batch inserts across requests. ([bac73636](https://github.com/chieftools/flowguard-proxy/commit/bac73636750a83028620a529af4cccbf43dfb325))
+
 ## [0.25.1]
 
 ### Changed
@@ -627,7 +633,8 @@ _No source changes; this release republishes 0.3.5._
 
 _Initial release._
 
-[Unreleased]: https://github.com/chieftools/flowguard-proxy/compare/v0.25.1...HEAD
+[Unreleased]: https://github.com/chieftools/flowguard-proxy/compare/v0.25.2...HEAD
+[0.25.2]: https://github.com/chieftools/flowguard-proxy/releases/tag/v0.25.2
 [0.25.1]: https://github.com/chieftools/flowguard-proxy/releases/tag/v0.25.1
 [0.25.0]: https://github.com/chieftools/flowguard-proxy/releases/tag/v0.25.0
 [0.24.0]: https://github.com/chieftools/flowguard-proxy/releases/tag/v0.24.0
