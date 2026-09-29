@@ -118,7 +118,7 @@ func TestFlowGuardIngestRetriesIdenticalRequestAndReleasesFailedBatch(t *testing
 	for _, recover := range []bool{true, false} {
 		t.Run(strconv.FormatBool(recover), func(t *testing.T) {
 			var bodies [][]byte
-			var digests []string
+			var digests, prepared []string
 			released := make(chan struct{})
 			options := asyncBatchWriterOptions{
 				maxBatchEntries:   1,
@@ -130,6 +130,7 @@ func TestFlowGuardIngestRetriesIdenticalRequestAndReleasesFailedBatch(t *testing
 				body := ingestTestBody(t, request)
 				bodies = append(bodies, body)
 				digests = append(digests, request.Header.Get("X-FlowGuard-Batch-SHA256"))
+				prepared = append(prepared, request.Header.Get("X-FlowGuard-Prepared-At"))
 				if len(bodies) == 1 || !recover {
 					return nil, errors.New("synthetic lost acknowledgement")
 				}
@@ -144,6 +145,11 @@ func TestFlowGuardIngestRetriesIdenticalRequestAndReleasesFailedBatch(t *testing
 
 			if len(bodies) != 2 || !bytes.Equal(bodies[0], bodies[1]) || digests[0] != digests[1] {
 				t.Fatal("retry changed the request or exceeded the shared retry limit")
+			}
+
+			micros, err := strconv.ParseInt(prepared[0], 10, 64)
+			if err != nil || prepared[0] != prepared[1] || time.Since(time.UnixMicro(micros)) > time.Minute {
+				t.Fatalf("retry did not repeat a current preparation time: %q", prepared)
 			}
 
 			if sink.pending != nil {
@@ -246,9 +252,11 @@ func TestFlowGuardIngestRejectsInvalidHTTPResponses(t *testing.T) {
 
 func TestFlowGuardIngestSplitsDaysAndRetriesOnlyPendingRequest(t *testing.T) {
 	var bodies [][]byte
+	var prepared []string
 	sink := ingestTestSink(t, func(request *http.Request) (*http.Response, error) {
 		body := ingestTestBody(t, request)
 		bodies = append(bodies, body)
+		prepared = append(prepared, request.Header.Get("X-FlowGuard-Prepared-At"))
 		if len(bodies) == 2 {
 			return nil, errors.New("synthetic second-day interruption")
 		}
@@ -266,6 +274,9 @@ func TestFlowGuardIngestSplitsDaysAndRetriesOnlyPendingRequest(t *testing.T) {
 
 	if len(bodies) != 3 || !bytes.Equal(bodies[1], bodies[2]) || bytes.Equal(bodies[0], bodies[1]) {
 		t.Fatal("day split or pending retry identity incorrect")
+	}
+	if prepared[1] != prepared[2] || prepared[0] == "" || prepared[1] == "" {
+		t.Fatalf("pending retry did not repeat its preparation time: %q", prepared)
 	}
 	sink.releaseBatch()
 }

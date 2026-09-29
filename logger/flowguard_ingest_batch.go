@@ -38,6 +38,9 @@ type ingestRequest struct {
 	body     []byte
 	events   int
 	rawBytes int
+	// preparedAt is set on the first send attempt and repeated on every retry so the gateway
+	// stores identical rows and ClickHouse can drop a retried request by its content.
+	preparedAt int64
 }
 
 func prepareIngestRequests(entries []*LogEntry, generation string) ([]ingestRequest, error) {

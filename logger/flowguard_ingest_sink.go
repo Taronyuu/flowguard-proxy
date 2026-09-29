@@ -135,6 +135,10 @@ func (s *FlowGuardIngestSink) sendBatch(ctx context.Context, entries []*LogEntry
 	}
 
 	for s.next < len(s.pending) {
+		if s.pending[s.next].preparedAt == 0 {
+			s.pending[s.next].preparedAt = time.Now().UnixMicro()
+		}
+
 		if err := s.sendRequest(ctx, s.pending[s.next]); err != nil {
 			return err
 		}
@@ -155,6 +159,7 @@ func (s *FlowGuardIngestSink) sendRequest(ctx context.Context, batch ingestReque
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Content-Encoding", "gzip")
 	request.Header.Set("X-FlowGuard-Batch-SHA256", batch.digest)
+	request.Header.Set("X-FlowGuard-Prepared-At", strconv.FormatInt(batch.preparedAt, 10))
 	if s.userAgent != "" {
 		request.Header.Set("User-Agent", s.userAgent)
 	}
