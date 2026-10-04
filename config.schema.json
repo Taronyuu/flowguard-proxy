@@ -69,6 +69,9 @@
         },
         "trusted_proxies": {
             "$ref": "#/definitions/trusted_proxies_config"
+        },
+        "decisions": {
+            "$ref": "#/definitions/decisions_config"
         }
     },
     "definitions": {
@@ -317,7 +320,8 @@
                         "proxy-iplist",
                         "registerable-domain",
                         "fingerprint-ja4",
-                        "behavior"
+                        "behavior",
+                        "decision"
                     ],
                     "description": "The type of value to match against"
                 },
@@ -1009,6 +1013,34 @@
             },
             "required": [
                 "url"
+            ],
+            "additionalProperties": false
+        },
+        "decisions_config": {
+            "type": "object",
+            "description": "Asynchronous decision feed from an external scorer over a local Unix socket",
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "description": "Enable the decision feed. The feed is also off when socket_path is empty. Default: false"
+                },
+                "socket_path": {
+                    "type": "string",
+                    "description": "Path to the scorer's Unix domain socket"
+                },
+                "scorer_uid": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Operating-system uid the scorer process must run as; connections from any other uid are refused"
+                },
+                "max_entries": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Maximum number of decisions kept in memory, dropping the ones closest to expiry first. Default: 100000"
+                }
+            },
+            "required": [
+                "enabled"
             ],
             "additionalProperties": false
         },

@@ -59,6 +59,7 @@ cat > "${DEB_DIR}/etc/flowguard/config.json" << 'EOF'
   "trusted_proxies": null
 }
 EOF
+chmod 600 "${DEB_DIR}/etc/flowguard/config.json"
 
 # Create systemd service file
 echo -e "${YELLOW}Creating systemd service file...${NC}"
@@ -121,7 +122,7 @@ chown -R root:root /etc/flowguard
 chown -R root:root /var/log/flowguard
 chown -R root:root /var/cache/flowguard
 chmod 755 /etc/flowguard
-chmod 644 /etc/flowguard/config.json
+chmod 600 /etc/flowguard/config.json
 chmod 755 /usr/bin/flowguard
 
 # Reload systemd

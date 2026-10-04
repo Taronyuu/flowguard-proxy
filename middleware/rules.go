@@ -423,6 +423,18 @@ func (rm *RulesMiddleware) evaluateMatch(r *http.Request, match *config.MatchCon
 		return rm.matchesIPListValue(GetClientIP(r), match)
 	case "proxy-iplist":
 		return rm.matchesIPListValue(GetProxyIP(r), match)
+	case "decision":
+		tier, has := GetDecisionTier(r)
+		switch match.Match {
+		case "exists":
+			return has
+		case "missing":
+			return !has
+		}
+		if !has {
+			return false
+		}
+		value = tier
 	default:
 		log.Printf("[middleware:rules] Unknown match type: %s", match.Type)
 		return false

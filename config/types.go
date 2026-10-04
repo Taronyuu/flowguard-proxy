@@ -23,6 +23,7 @@ type Config struct {
 	Challenges     *ChallengesConfig      `json:"challenges,omitempty"`
 	IPDatabase     *IPDatabaseConfig      `json:"ip_database,omitempty"`
 	TrustedProxies *TrustedProxiesConfig  `json:"trusted_proxies,omitempty"`
+	Decisions      *DecisionsConfig       `json:"decisions,omitempty"`
 }
 
 type HostConfig struct {
@@ -125,6 +126,13 @@ type PoWChallengeConfig struct {
 type IPDatabaseConfig struct {
 	URL                    string `json:"url"`
 	RefreshIntervalSeconds int    `json:"refresh_interval_seconds"`
+}
+
+type DecisionsConfig struct {
+	Enabled    bool   `json:"enabled"`
+	SocketPath string `json:"socket_path,omitempty"`
+	ScorerUID  int    `json:"scorer_uid,omitempty"`
+	MaxEntries int    `json:"max_entries,omitempty"`
 }
 
 type TrustedProxiesConfig struct {

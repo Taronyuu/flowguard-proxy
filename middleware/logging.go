@@ -139,6 +139,15 @@ type RequestLogEntryFail2BanInfo struct {
 	Jails []string `json:"jails"`
 }
 
+type RequestLogEntryDecisionInfo struct {
+	Tier         string  `json:"tier"`
+	Key          string  `json:"key"`
+	Score        float64 `json:"score"`
+	Reason       string  `json:"reason,omitempty"`
+	ModelVersion string  `json:"model_version,omitempty"`
+	ExpiresAt    string  `json:"expires_at,omitempty"`
+}
+
 type LoggingMiddleware struct {
 	configMgr       *config.Manager
 	loggerManager   *logger.Manager
@@ -318,6 +327,13 @@ func (lm *LoggingMiddleware) logRequest(r *http.Request, wrapper *ResponseWriter
 
 	if fail2banInfo := GetFail2BanInfo(r); fail2banInfo != nil {
 		entry.Data["fail2ban"] = fail2banInfo
+	}
+
+	if decisionInfo, resolveUS, active := getDecisionLogInfo(r); active {
+		entry.Data["decision_resolve_us"] = resolveUS
+		if decisionInfo != nil {
+			entry.Data["decision"] = decisionInfo
+		}
 	}
 
 	if proxy := getProxyInfo(r); proxy != nil {
@@ -709,6 +725,26 @@ func getRequestURLInfo(r *http.Request) RequestLogEntryRequestURLInfo {
 		NormalizedPath:     normalization.NormalizePath(r.URL.Path),
 		RegisterableDomain: normalization.RegisterableDomain(domain),
 	}
+}
+
+func getDecisionLogInfo(r *http.Request) (*RequestLogEntryDecisionInfo, int64, bool) {
+	result := GetDecisionResolveResult(r)
+	if result == nil {
+		return nil, 0, false
+	}
+	if result.Decision == nil {
+		return nil, result.ResolveUS, true
+	}
+
+	d := result.Decision
+	return &RequestLogEntryDecisionInfo{
+		Tier:         d.Tier,
+		Key:          d.Key,
+		Score:        d.Score,
+		Reason:       d.Reason,
+		ModelVersion: d.ModelVersion,
+		ExpiresAt:    d.ExpiresAt.UTC().Format(time.RFC3339),
+	}, result.ResolveUS, true
 }
 
 func getCloudflareInfo(r *http.Request) *RequestLogEntryCloudflareInfo {

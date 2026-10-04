@@ -15,6 +15,7 @@ import (
 	"flowguard/api"
 	"flowguard/certmanager"
 	"flowguard/config"
+	"flowguard/decisions"
 	"flowguard/fail2ban"
 	"flowguard/iplist"
 	"flowguard/logger"
@@ -48,6 +49,8 @@ type Manager struct {
 	fail2banManager      *fail2ban.Manager
 	firewallState        api.FirewallHeartbeat
 	middlewareChain      *middleware.Chain
+	decisionMiddleware   *middleware.DecisionMiddleware
+	decisionSubscriber   *decisions.Subscriber
 	upstreamMode         string
 	upstreamModeOverride string
 	upstreamSettings     config.TransparentUpstreamSettings
@@ -77,11 +80,16 @@ func NewManager(configMgr *config.Manager, cfg *Config) (*Manager, error) {
 	middlewareChain := middleware.NewChain()
 	fail2banManager := fail2ban.NewManager(fail2ban.Options{Verbose: cfg.Verbose})
 
+	decisionStore := decisions.NewStore(decisions.DefaultMaxEntries)
+	decisionMiddleware := middleware.NewDecisionMiddleware(decisionStore)
+	decisionSubscriber := decisions.NewSubscriber(decisionStore)
+
 	// Add middleware in the order they should execute
 	// Timing middleware MUST be first to capture the full middleware stack timing
 	middlewareChain.Add(middleware.NewTimingMiddleware())                  // Captures precise timing for all middleware (must be first!)
 	middlewareChain.Add(middleware.NewIPLookupMiddleware(configMgr))       // Enriches request with IP/ASN data
 	middlewareChain.Add(middleware.NewBehaviorTracker())                   // Tracks rolling request behavior for logs and rules
+	middlewareChain.Add(decisionMiddleware)                                // Resolves the request's decision tier once, for Rules and Logging
 	middlewareChain.Add(middleware.NewLoggingMiddleware(configMgr))        // Logs request and response with enriched data
 	middlewareChain.Add(middleware.NewFail2BanMiddleware(fail2banManager)) // Enforces synchronized Fail2Ban bans
 	rulesMiddleware := middleware.NewRulesMiddleware(configMgr)            // Evaluates user defined rules
@@ -163,6 +171,8 @@ func NewManager(configMgr *config.Manager, cfg *Config) (*Manager, error) {
 		configManager:        configMgr,
 		fail2banManager:      fail2banManager,
 		middlewareChain:      middlewareChain,
+		decisionMiddleware:   decisionMiddleware,
+		decisionSubscriber:   decisionSubscriber,
 		upstreamMode:         upstreamMode,
 		upstreamModeOverride: cfg.UpstreamClientIPMode,
 		upstreamSettings:     upstreamSettings,
@@ -188,11 +198,14 @@ func NewManager(configMgr *config.Manager, cfg *Config) (*Manager, error) {
 	// Initialize IP list manager with current config
 	pm.initializeIPListManager(configMgr.GetConfig(), rulesMiddleware)
 
+	pm.applyDecisionsConfig(configMgr.GetConfig())
+
 	// Register callback to handle IP list configuration changes
 	configMgr.OnChange(func(newConfig *config.Config) {
 		pm.handleIPListConfigChange(newConfig, rulesMiddleware)
 		pm.handleServerConfigChange(newConfig)
 		pm.fail2banManager.SetEnabled(newConfig.Fail2BanEnabled())
+		pm.applyDecisionsConfig(newConfig)
 	})
 
 	// Register callback to handle IP list update events from WebSocket
@@ -363,6 +376,22 @@ func (p *Manager) handleIPListUpdateEvent(listIDs []string) {
 			log.Printf("[ip_list] Failed to refresh list %s: %v", listID, err)
 		}
 	}
+}
+
+func (p *Manager) applyDecisionsConfig(cfg *config.Config) {
+	active := cfg.DecisionsActive()
+	p.decisionMiddleware.SetActive(active)
+	if !active {
+		p.decisionSubscriber.Stop()
+		return
+	}
+
+	socketPath, scorerUID, maxEntries := cfg.DecisionsSettings()
+	p.decisionSubscriber.Start(decisions.SubscriberConfig{
+		SocketPath: socketPath,
+		ScorerUID:  scorerUID,
+		MaxEntries: maxEntries,
+	}, p.config.Verbose)
 }
 
 func (p *Manager) handleServerConfigChange(newConfig *config.Config) {
@@ -1060,6 +1089,8 @@ func (p *Manager) Shutdown() error {
 	if p.fail2banManager != nil {
 		p.fail2banManager.Stop()
 	}
+
+	p.decisionSubscriber.Stop()
 
 	// Stop the configuration manager
 	p.configManager.Stop()

@@ -41,6 +41,35 @@ func TestSchemaIncludesOptInFail2BanConfiguration(t *testing.T) {
 	}
 }
 
+func TestSchema_S_decision_rules_decision_match_type(t *testing.T) {
+	schema := readConfigSchema(t)
+	match := schema["definitions"].(map[string]any)["match"].(map[string]any)
+	properties := match["properties"].(map[string]any)
+	matchType := properties["type"].(map[string]any)
+	typeEnum := matchType["enum"].([]any)
+
+	if !schemaStringListContains(typeEnum, "decision") {
+		t.Fatal("expected match type enum to include decision")
+	}
+
+	properties = schema["properties"].(map[string]any)
+	decisionsProperty := properties["decisions"].(map[string]any)
+	if decisionsProperty["$ref"] != "#/definitions/decisions_config" {
+		t.Fatalf("unexpected decisions property: %#v", decisionsProperty)
+	}
+
+	decisionsDefinition := schema["definitions"].(map[string]any)["decisions_config"].(map[string]any)
+	decisionsProperties := decisionsDefinition["properties"].(map[string]any)
+	for _, field := range []string{"enabled", "socket_path", "scorer_uid", "max_entries"} {
+		if _, ok := decisionsProperties[field]; !ok {
+			t.Fatalf("expected decisions_config to define %q", field)
+		}
+	}
+	if !schemaStringListContains(decisionsDefinition["required"].([]any), "enabled") {
+		t.Fatal("decisions enabled field must be required when the object is present")
+	}
+}
+
 func readConfigSchema(t *testing.T) map[string]any {
 	t.Helper()
 
